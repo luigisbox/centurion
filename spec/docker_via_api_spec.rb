@@ -95,18 +95,18 @@ describe Centurion::DockerViaApi do
       expect(api.remove_container('12345')).to eq(true)
     end
 
-    it 'lists old containers for a port' do
+    it 'lists old containers for a name' do
       expect(Excon).to receive(:get).
                            with(excon_uri + 'v1.7/containers/json?all=1', {}).
                            and_return(double(body: inspected_containers.to_json, status: 200))
       expect(Excon).to receive(:get).
                            with(excon_uri + 'v1.7/containers/123/json', {}).
-                           and_return(double(body: inspected_container_on_port("123", 8485).to_json, status: 200))
+                           and_return(double(body: inspected_container_with_name("123", 'walrus-1234567890abcd').to_json, status: 200))
       expect(Excon).to receive(:get).
                            with(excon_uri + 'v1.7/containers/789/json', {}).
-                           and_return(double(body: inspected_container_on_port("789", 8486).to_json, status: 200))
+                           and_return(double(body: inspected_container_with_name("789", 'whale-2234567890abcd').to_json, status: 200))
 
-      expect(api.old_containers_for_port(8485)).to eq([{"Id" => "123", "Status" => "Exit 0"}])
+      expect(api.old_containers_for_name('walrus')).to eq([{"Id" => "123", "Status" => "Exit 0"}])
     end
 
     it 'inspects an image' do
@@ -216,7 +216,7 @@ describe Centurion::DockerViaApi do
       expect(api.remove_container('12345')).to eq(true)
     end
 
-    it 'lists old containers for a port' do
+    it 'lists old containers for a name' do
       expect(Excon).to receive(:get).
                            with(excon_uri + 'v1.7/containers/json?all=1',
                                 client_cert: '/certs/cert.pem',
@@ -226,14 +226,14 @@ describe Centurion::DockerViaApi do
                            with(excon_uri + 'v1.7/containers/123/json',
                                 client_cert: '/certs/cert.pem',
                                 client_key: '/certs/key.pem').
-                           and_return(double(body: inspected_container_on_port("123", 8485).to_json, status: 200))
+                           and_return(double(body: inspected_container_with_name("123", 'walrus-1234567890abcd').to_json, status: 200))
       expect(Excon).to receive(:get).
                            with(excon_uri + 'v1.7/containers/789/json',
                                 client_cert: '/certs/cert.pem',
                                 client_key: '/certs/key.pem').
-                           and_return(double(body: inspected_container_on_port("789", 8486).to_json, status: 200))
+                           and_return(double(body: inspected_container_with_name("789", 'whale-1234567890abcd').to_json, status: 200))
 
-      expect(api.old_containers_for_port(8485)).to eq([{"Id" => "123", "Status" => "Exit 0"}])
+      expect(api.old_containers_for_name('walrus')).to eq([{"Id" => "123", "Status" => "Exit 0"}])
     end
   end
 
@@ -252,14 +252,15 @@ describe Centurion::DockerViaApi do
     end
   end
 
-  def inspected_container_on_port(id, port)
+  def inspected_container_with_name(id, name)
     {
       "Id" => id.to_s,
+      "Name" => "/#{name}",
       "HostConfig" => {
         "PortBindings" => {
           "80/tcp" => [
             "HostIp" => "0.0.0.0",
-            "HostPort" => port.to_s
+            "HostPort" => '80'
           ]
         }
       }

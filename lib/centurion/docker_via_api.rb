@@ -34,12 +34,12 @@ class Centurion::DockerViaApi
     JSON.load(response.body)
   end
 
-  def old_containers_for_port(host_port)
+  def old_containers_for_name(wanted_name)
     old_containers = ps(all: true).select do |container|
       container["Status"] =~ /^(Exit |Exited)/
     end.select do |container|
       inspected = inspect_container container["Id"]
-      container_listening_on_port?(inspected, host_port)
+      inspected['Name'] =~ /\A\/#{wanted_name}(-[a-f0-9]{14})?\Z/
     end
     old_containers
   end

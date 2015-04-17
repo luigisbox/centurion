@@ -11,7 +11,7 @@ describe Centurion::DockerServer do
        'Created' => 1414797234,
        'Id'      => '28970c706db0f69716af43527ed926acbd82581e1cef5e4e6ff152fce1b79972',
        'Image'   => 'centurion-test:latest',
-       'Names'   => ['/centurion-783aac4'],
+       'Names'   => ['/centurion-783aac48378283'],
        'Ports'   => [{'PrivatePort'=>80, 'Type'=>'tcp', 'IP'=>'0.0.0.0', 'PublicPort'=>23235}],
        'Status'  => 'Up 3 days'
      }
@@ -56,14 +56,6 @@ describe Centurion::DockerServer do
   context 'finding containers' do
     before do
       allow(server).to receive(:ps).and_return(ps)
-    end
-
-    it 'finds containers by port' do
-      expect(server.find_containers_by_public_port(23235, 'tcp')).to eq([container])
-    end
-
-    it 'only returns correct matches by port' do
-      expect(server.find_containers_by_public_port(1234, 'tcp')).to be_empty
     end
 
     it 'finds containers by name' do

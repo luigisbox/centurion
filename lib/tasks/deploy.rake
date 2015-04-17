@@ -75,7 +75,7 @@ namespace :deploy do
   # - remote: stop
   task :stop do
     on_each_docker_host do |server|
-      stop_containers(server, fetch(:port_bindings), fetch(:stop_timeout, 30))
+      stop_containers(server, fetch(:name), fetch(:stop_timeout, 30))
     end
   end
 
@@ -87,6 +87,7 @@ namespace :deploy do
     on_each_docker_host do |server|
       start_new_container(
         server,
+        fetch(:name),
         fetch(:image_id),
         fetch(:port_bindings),
         fetch(:binds),
@@ -102,6 +103,7 @@ namespace :deploy do
     on_each_docker_host do |server|
       launch_console(
         server,
+        fetch(:name),
         fetch(:image_id),
         fetch(:port_bindings),
         fetch(:binds),
@@ -112,10 +114,11 @@ namespace :deploy do
 
   task :rolling_deploy do
     on_each_docker_host do |server|
-      stop_containers(server, fetch(:port_bindings), fetch(:stop_timeout, 30))
+      stop_containers(server, fetch(:name), fetch(:stop_timeout, 30))
 
       start_new_container(
         server,
+        fetch(:name),
         fetch(:image_id),
         fetch(:port_bindings),
         fetch(:binds),
@@ -134,6 +137,7 @@ namespace :deploy do
         wait_for_health_check_ok(
           fetch(:health_check, method(:http_status_ok?)),
           server,
+          fetch(:name),
           port,
           fetch(:status_endpoint, '/'),
           fetch(:image),
@@ -149,7 +153,7 @@ namespace :deploy do
 
   task :cleanup do
     on_each_docker_host do |target_server|
-      cleanup_containers(target_server, fetch(:port_bindings))
+      cleanup_containers(target_server, fetch(:name))
     end
   end
 

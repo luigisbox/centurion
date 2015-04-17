@@ -6,6 +6,7 @@ describe Centurion::Deploy do
   let(:mock_bad_status) { double('http_status_ok', status: 500) }
   let(:server)          { double('docker_server', attach: true, hostname: hostname) }
   let(:port)            { 8484 }
+  let(:service_name)    { 'sad_walrus' }
   let(:container)       { { 'Ports' => [{ 'PublicPort' => port }, 'Created' => Time.now.to_i ], 'Id' => '21adfd2ef2ef2349494a', 'Names' => [ 'name1' ] } }
   let(:endpoint)        { '/status/check' }
   let(:test_deploy) do
@@ -50,23 +51,23 @@ describe Centurion::Deploy do
 
   describe '#container_up?' do
     it 'recognizes when no containers are running' do
-      expect(server).to receive(:find_containers_by_public_port).and_return([])
+      expect(server).to receive(:find_containers_by_name).and_return([])
 
-      expect(test_deploy.container_up?(server, port)).to be_falsey
+      expect(test_deploy.container_up?(server, service_name)).to be_falsey
     end
 
     it 'complains when more than one container is bound to this port' do
-      expect(server).to receive(:find_containers_by_public_port).and_return([1,2])
+      expect(server).to receive(:find_containers_by_name).and_return([1,2])
       expect(test_deploy).to receive(:error).with /More than one container/
 
-      expect(test_deploy.container_up?(server, port)).to be_falsey
+      expect(test_deploy.container_up?(server, service_name)).to be_falsey
     end
 
     it 'recognizes when the container is actually running' do
-      expect(server).to receive(:find_containers_by_public_port).and_return([container])
+      expect(server).to receive(:find_containers_by_name).and_return([container])
       expect(test_deploy).to receive(:info).with /Found container/
 
-      expect(test_deploy.container_up?(server, port)).to be_truthy
+      expect(test_deploy.container_up?(server, service_name)).to be_truthy
     end
   end
 
@@ -79,7 +80,7 @@ describe Centurion::Deploy do
       allow(test_deploy).to receive(:container_up?).and_return(true)
       allow(test_deploy).to receive(:http_status_ok?).and_return(true)
 
-      test_deploy.wait_for_health_check_ok(test_deploy.method(:http_status_ok?), server, port, '/foo', 'image_id', 'chaucer')
+      test_deploy.wait_for_health_check_ok(test_deploy.method(:http_status_ok?), server, service_name, port, '/foo', 'image_id', 'chaucer')
       expect(test_deploy).to have_received(:info).with(/Waiting for the port/)
       expect(test_deploy).to have_received(:info).with('Container is up!')
     end
@@ -91,7 +92,7 @@ describe Centurion::Deploy do
       expect(test_deploy).to receive(:exit)
       expect(test_deploy).to receive(:sleep).with(0)
 
-      test_deploy.wait_for_health_check_ok(test_deploy.method(:http_status_ok?), server, port, '/foo', 'image_id', 'chaucer', 0, 1)
+      test_deploy.wait_for_health_check_ok(test_deploy.method(:http_status_ok?), server, service_name, port, '/foo', 'image_id', 'chaucer', 0, 1)
       expect(test_deploy).to have_received(:info).with(/Waiting for the port/)
     end
 
@@ -102,25 +103,25 @@ describe Centurion::Deploy do
       allow(test_deploy).to receive(:warn)
       expect(test_deploy).to receive(:exit)
 
-      test_deploy.wait_for_health_check_ok(test_deploy.method(:http_status_ok?), server, port, '/foo', 'image_id', 'chaucer', 1, 0)
+      test_deploy.wait_for_health_check_ok(test_deploy.method(:http_status_ok?), server, service_name, port, '/foo', 'image_id', 'chaucer', 1, 0)
       expect(test_deploy).to have_received(:info).with(/Waiting for the port/)
     end
   end
 
   describe '#cleanup_containers' do
     it 'deletes all but two containers' do
-      expect(server).to receive(:old_containers_for_port).with(port.to_s).and_return([
-        {'Id' => '123', 'Names' => ['foo']},
-        {'Id' => '456', 'Names' => ['foo']},
-        {'Id' => '789', 'Names' => ['foo']},
-        {'Id' => '0ab', 'Names' => ['foo']},
-        {'Id' => 'cde', 'Names' => ['foo']},
+      expect(server).to receive(:old_containers_for_name).with('walrus').and_return([
+        {'Id' => '123', 'Names' => ['walrus-3bab311b460bdf']},
+        {'Id' => '456', 'Names' => ['walrus-4bab311b460bdf']},
+        {'Id' => '789', 'Names' => ['walrus-5bab311b460bdf']},
+        {'Id' => '0ab', 'Names' => ['walrus-6bab311b460bdf']},
+        {'Id' => 'cde', 'Names' => ['walrus-7bab311b460bdf']},
       ])
       expect(server).to receive(:remove_container).with('789')
       expect(server).to receive(:remove_container).with('0ab')
       expect(server).to receive(:remove_container).with('cde')
 
-      test_deploy.cleanup_containers(server, {'80/tcp' => [{'HostIp' => '0.0.0.0', 'HostPort' => port.to_s}]})
+      test_deploy.cleanup_containers(server, 'walrus')
     end
   end
 
@@ -128,14 +129,12 @@ describe Centurion::Deploy do
     it 'calls stop_container on the right containers' do
       second_container = container.dup
       containers = [ container, second_container ]
-      bindings = {'80/tcp'=>[{'HostIp'=>'0.0.0.0', 'HostPort'=>'80'}]}
 
-      expect(server).to receive(:find_containers_by_public_port).and_return(containers)
-      expect(test_deploy).to receive(:public_port_for).with(bindings).and_return('80')
+      expect(server).to receive(:find_containers_by_name).and_return(containers)
       expect(server).to receive(:stop_container).with(container['Id'], 30).once
       expect(server).to receive(:stop_container).with(second_container['Id'], 30).once
 
-      test_deploy.stop_containers(server, bindings)
+      test_deploy.stop_containers(server, service_name)
     end
   end
 
@@ -293,7 +292,7 @@ describe Centurion::Deploy do
         }
       ).once
 
-      test_deploy.start_new_container(server, 'image_id', bindings, {}, nil, nil)
+      test_deploy.start_new_container(server, service_name, 'image_id', bindings, {}, nil, nil)
     end
   end
 
@@ -325,7 +324,7 @@ describe Centurion::Deploy do
         }
       ).once
 
-      test_deploy.start_new_container(server, 'image_id', bindings, {}, nil, nil)
+      test_deploy.start_new_container(server, service_name, 'image_id', bindings, {}, nil, nil)
     end
 
     it 'pass "always" restart policy to start_container' do
@@ -341,7 +340,7 @@ describe Centurion::Deploy do
         }
       ).once
 
-      test_deploy.start_new_container(server, 'image_id', bindings, {}, nil, nil)
+      test_deploy.start_new_container(server, service_name, 'image_id', bindings, {}, nil, nil)
     end
 
     it 'pass "on-failure with 50 retries" restart policy to start_container' do
@@ -359,7 +358,7 @@ describe Centurion::Deploy do
         }
       ).once
 
-      test_deploy.start_new_container(server, 'image_id', bindings, {}, nil, nil)
+      test_deploy.start_new_container(server, service_name, 'image_id', bindings, {}, nil, nil)
     end
 
     it 'pass "no" restart policy to start_container' do
@@ -375,7 +374,7 @@ describe Centurion::Deploy do
         }
       ).once
 
-      test_deploy.start_new_container(server, 'image_id', bindings, {}, nil, nil)
+      test_deploy.start_new_container(server, service_name, 'image_id', bindings, {}, nil, nil)
     end
 
     it 'pass "garbage" restart policy to start_container' do
@@ -392,7 +391,7 @@ describe Centurion::Deploy do
         }
       ).once
 
-      test_deploy.start_new_container(server, 'image_id', bindings, {}, nil, nil)
+      test_deploy.start_new_container(server, service_name, 'image_id', bindings, {}, nil, nil)
     end
   end
 
@@ -407,13 +406,13 @@ describe Centurion::Deploy do
 
       allow(test_deploy).to receive(:start_container_with_config)
 
-      test_deploy.start_new_container(server, 'image_id', bindings, {}, nil)
+      test_deploy.start_new_container(server, service_name, 'image_id', bindings, {}, nil)
     end
 
     it 'starts the container' do
-      expect(test_deploy).to receive(:start_container_with_config).with(server, {}, anything(), anything())
+      expect(test_deploy).to receive(:start_container_with_config).with(server, service_name, {}, anything(), anything())
 
-      test_deploy.start_new_container(server, 'image_id', bindings, {})
+      test_deploy.start_new_container(server, service_name, 'image_id', bindings, {})
     end
 
     it 'sets the container hostname when asked' do
@@ -428,17 +427,16 @@ describe Centurion::Deploy do
           'Env'          => ['FOO=BAR'],
           'Volumes'      => {'/bar' => {}},
         ),
-        nil
+        service_name
       ).and_return(container)
 
       expect(server).to receive(:start_container)
       expect(server).to receive(:inspect_container)
-      test_deploy.start_new_container(server, 'image_id', bindings, volumes, env, command)
+      test_deploy.start_new_container(server, service_name, 'image_id', bindings, volumes, env, command)
     end
 
     it 'ultimately asks the server object to do the work' do
       allow(test_deploy).to receive(:fetch).with(:custom_dns).and_return(nil)
-      allow(test_deploy).to receive(:fetch).with(:name).and_return('app1')
 
       expect(server).to receive(:create_container).with(
         hash_including(
@@ -449,13 +447,13 @@ describe Centurion::Deploy do
           'Env'          => ['FOO=BAR'],
           'Volumes'      => {'/bar' => {}},
         ),
-        'app1'
+        service_name
       ).and_return(container)
 
       expect(server).to receive(:start_container)
       expect(server).to receive(:inspect_container)
 
-      new_container = test_deploy.start_new_container(server, 'image_id', bindings, volumes, env, command)
+      new_container = test_deploy.start_new_container(server, service_name, 'image_id', bindings, volumes, env, command)
       expect(new_container).to eq(container)
     end
   end
@@ -472,24 +470,24 @@ describe Centurion::Deploy do
       expect(test_deploy).to receive(:container_config_for).with(server, 'image_id', bindings, env, volumes, command, memory, cpu_shares).once
       allow(test_deploy).to receive(:start_container_with_config)
 
-      test_deploy.start_new_container(server, 'image_id', bindings, volumes, env, command, memory, cpu_shares)
+      test_deploy.start_new_container(server, service_name, 'image_id', bindings, volumes, env, command, memory, cpu_shares)
     end
 
     it 'augments the container_config' do
-      expect(test_deploy).to receive(:start_container_with_config).with(server, volumes,
+      expect(test_deploy).to receive(:start_container_with_config).with(server, service_name, volumes,
         anything(),
         hash_including('Cmd' => [ '/bin/bash' ], 'AttachStdin' => true , 'Tty' => true , 'OpenStdin' => true)
       ).and_return({'Id' => 'shakespeare'})
 
-      test_deploy.launch_console(server, 'image_id', bindings, volumes, env)
+      test_deploy.launch_console(server, service_name, 'image_id', bindings, volumes, env)
     end
 
     it 'starts the console' do
       expect(test_deploy).to receive(:start_container_with_config).with(
-        server, nil, anything(), anything()
+        server, service_name, anything(), anything(), anything()
       ).and_return({'Id' => 'shakespeare'})
 
-      test_deploy.launch_console(server, 'image_id', bindings, volumes, env)
+      test_deploy.launch_console(server, service_name, 'image_id', bindings, volumes, env)
       expect(server).to have_received(:attach).with('shakespeare')
     end
   end

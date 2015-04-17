@@ -8,10 +8,10 @@ module Centurion::Deploy
   INVALID_CGROUP_CPUSHARES_VALUE = 101
   INVALID_CGROUP_MEMORY_VALUE = 102
 
-  def stop_containers(target_server, port_bindings, timeout = 30)
-    public_port    = public_port_for(port_bindings)
-    old_containers = target_server.find_containers_by_public_port(public_port)
+  def stop_containers(target_server, service_name, timeout = 30)
+    old_containers = target_server.find_containers_by_name(service_name)
     info "Stopping container(s): #{old_containers.inspect}"
+
 
     old_containers.each do |old_container|
       info "Stopping old container #{old_container['Id'][0..7]} (#{old_container['Names'].join(',')})"
@@ -19,10 +19,10 @@ module Centurion::Deploy
     end
   end
 
-  def wait_for_health_check_ok(health_check_method, target_server, port, endpoint, image_id, tag, sleep_time=5, retries=12)
+  def wait_for_health_check_ok(health_check_method, target_server, service_name, port, endpoint, image_id, tag, sleep_time=5, retries=12)
     info 'Waiting for the port to come up'
     1.upto(retries) do
-      if container_up?(target_server, port) && health_check_method.call(target_server, port, endpoint)
+      if container_up?(target_server, service_name) && health_check_method.call(target_server, port, endpoint)
         info 'Container is up!'
         break
       end
@@ -37,20 +37,20 @@ module Centurion::Deploy
     end
   end
 
-  def container_up?(target_server, port)
+  def container_up?(target_server, service_name)
     # The API returns a record set like this:
     #[{"Command"=>"script/run ", "Created"=>1394470428, "Id"=>"41a68bda6eb0a5bb78bbde19363e543f9c4f0e845a3eb130a6253972051bffb0", "Image"=>"quay.io/newrelic/rubicon:5f23ac3fad7979cd1efdc9295e0d8c5707d1c806", "Names"=>["/happy_pike"], "Ports"=>[{"IP"=>"0.0.0.0", "PrivatePort"=>80, "PublicPort"=>8484, "Type"=>"tcp"}], "Status"=>"Up 13 seconds"}]
 
-    running_containers = target_server.find_containers_by_public_port(port)
+    running_containers = target_server.find_containers_by_name(service_name)
     container = running_containers.pop
 
     unless running_containers.empty?
       # This _should_ never happen, but...
-      error "More than one container is bound to port #{port} on #{target_server}!"
+      error "More than one container is bound to service name #{service_name} on #{target_server}!"
       return false
     end
 
-    if container && container['Ports'].any? { |bind| bind['PublicPort'].to_i == port.to_i }
+    if container
       info "Found container up for #{Time.now.to_i - container['Created'].to_i} seconds"
       return true
     end
@@ -89,12 +89,11 @@ module Centurion::Deploy
     sleep(fetch(:rolling_deploy_check_interval, 5))
   end
 
-  def cleanup_containers(target_server, port_bindings)
-    public_port    = public_port_for(port_bindings)
-    old_containers = target_server.old_containers_for_port(public_port)
+  def cleanup_containers(target_server, service_name)
+    old_containers = target_server.old_containers_for_name(service_name)
     old_containers.shift(2)
 
-    info "Public port #{public_port}"
+    info "Service name #{service_name}"
     old_containers.each do |old_container|
       info "Removing old container #{old_container['Id'][0..7]} (#{old_container['Names'].join(',')})"
       target_server.remove_container(old_container['Id'])
@@ -146,19 +145,19 @@ module Centurion::Deploy
     container_config
   end
 
-  def start_new_container(target_server, image_id, port_bindings, volumes, env_vars=nil, command=nil, memory=nil, cpu_shares=nil)
+  def start_new_container(target_server, service_name, image_id, port_bindings, volumes, env_vars=nil, command=nil, memory=nil, cpu_shares=nil)
     container_config = container_config_for(target_server, image_id, port_bindings, env_vars, volumes, command, memory, cpu_shares)
-    start_container_with_config(target_server, volumes, port_bindings, container_config)
+    start_container_with_config(target_server, service_name, volumes, port_bindings, container_config)
   end
 
-  def launch_console(target_server, image_id, port_bindings, volumes, env_vars=nil)
+  def launch_console(target_server, service_name, image_id, port_bindings, volumes, env_vars=nil)
     container_config = container_config_for(target_server, image_id, port_bindings, env_vars, volumes, ['/bin/bash']).merge(
       'AttachStdin' => true,
       'Tty'         => true,
       'OpenStdin'   => true,
     )
 
-    container = start_container_with_config(target_server, volumes, port_bindings, container_config)
+    container = start_container_with_config(target_server, service_name, volumes, port_bindings, container_config)
 
     target_server.attach(container['Id'])
   end
@@ -180,9 +179,9 @@ module Centurion::Deploy
     host_config
   end
 
-  def start_container_with_config(target_server, volumes, port_bindings, container_config)
+  def start_container_with_config(target_server, service_name, volumes, port_bindings, container_config)
     info "Creating new container for #{container_config['Image'][0..7]}"
-    new_container = target_server.create_container(container_config, fetch(:name))
+    new_container = target_server.create_container(container_config, service_name)
 
     host_config = {}
 
