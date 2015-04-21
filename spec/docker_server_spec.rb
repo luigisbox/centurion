@@ -58,6 +58,14 @@ describe Centurion::DockerServer do
       allow(server).to receive(:ps).and_return(ps)
     end
 
+    it 'finds containers by port' do
+      expect(server.find_containers_by_public_port(23235, 'tcp')).to eq([container])
+    end
+
+    it 'only returns correct matches by port' do
+      expect(server.find_containers_by_public_port(1234, 'tcp')).to be_empty
+    end
+
     it 'finds containers by name' do
       expect(server.find_containers_by_name('centurion')).to eq([container])
     end

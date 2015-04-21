@@ -8,10 +8,10 @@ module Centurion::Deploy
   INVALID_CGROUP_CPUSHARES_VALUE = 101
   INVALID_CGROUP_MEMORY_VALUE = 102
 
-  def stop_containers(target_server, service_name, timeout = 30)
-    old_containers = target_server.find_containers_by_name(service_name)
+  def stop_containers(target_server, port_bindings, timeout = 30)
+    public_port    = public_port_for(port_bindings)
+    old_containers = target_server.find_containers_by_public_port(public_port)
     info "Stopping container(s): #{old_containers.inspect}"
-
 
     old_containers.each do |old_container|
       info "Stopping old container #{old_container['Id'][0..7]} (#{old_container['Names'].join(',')})"

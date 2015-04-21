@@ -123,12 +123,13 @@ describe Centurion::Deploy do
     it 'calls stop_container on the right containers' do
       second_container = container.dup
       containers = [ container, second_container ]
+      bindings = {'80/tcp'=>[{'HostIp'=>'0.0.0.0', 'HostPort'=>'80'}]}
 
-      expect(server).to receive(:find_containers_by_name).and_return(containers)
+      expect(server).to receive(:find_containers_by_public_port).with("80").and_return(containers)
       expect(server).to receive(:stop_container).with(container['Id'], 30).once
       expect(server).to receive(:stop_container).with(second_container['Id'], 30).once
 
-      test_deploy.stop_containers(server, service_name)
+      test_deploy.stop_containers(server, bindings)
     end
   end
 
