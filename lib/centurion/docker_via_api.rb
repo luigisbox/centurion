@@ -34,16 +34,6 @@ class Centurion::DockerViaApi
     JSON.load(response.body)
   end
 
-  def old_containers_for_name(wanted_name)
-    old_containers = ps(all: true).select do |container|
-      container["Status"] =~ /^(Exit |Exited)/
-    end.select do |container|
-      inspected = inspect_container container["Id"]
-      inspected['Name'] =~ /\A\/#{wanted_name}(-[a-f0-9]{14})?\Z/
-    end
-    old_containers
-  end
-
   def remove_container(container_id)
     path = "/v1.7/containers/#{container_id}"
     response = Excon.delete(
