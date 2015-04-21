@@ -41,6 +41,10 @@ class Centurion::DockerServer
     end
   end
 
+  def find_container_by_id(container_id)
+    ps.find { |container| container && container['Id'] == container_id }
+  end
+
   private
 
   def docker_via_api

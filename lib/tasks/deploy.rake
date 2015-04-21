@@ -116,7 +116,7 @@ namespace :deploy do
     on_each_docker_host do |server|
       stop_containers(server, fetch(:name), fetch(:stop_timeout, 30))
 
-      start_new_container(
+      container = start_new_container(
         server,
         fetch(:name),
         fetch(:image_id),
@@ -137,7 +137,7 @@ namespace :deploy do
         wait_for_health_check_ok(
           fetch(:health_check, method(:http_status_ok?)),
           server,
-          fetch(:name),
+          container['Id'],
           port,
           fetch(:status_endpoint, '/'),
           fetch(:image),

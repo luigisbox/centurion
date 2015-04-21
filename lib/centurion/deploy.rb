@@ -19,10 +19,10 @@ module Centurion::Deploy
     end
   end
 
-  def wait_for_health_check_ok(health_check_method, target_server, service_name, port, endpoint, image_id, tag, sleep_time=5, retries=12)
+  def wait_for_health_check_ok(health_check_method, target_server, container_id, port, endpoint, image_id, tag, sleep_time=5, retries=12)
     info 'Waiting for the port to come up'
     1.upto(retries) do
-      if container_up?(target_server, service_name) && health_check_method.call(target_server, port, endpoint)
+      if container_up?(target_server, container_id) && health_check_method.call(target_server, port, endpoint)
         info 'Container is up!'
         break
       end
@@ -37,18 +37,11 @@ module Centurion::Deploy
     end
   end
 
-  def container_up?(target_server, service_name)
+  def container_up?(target_server, container_id)
     # The API returns a record set like this:
     #[{"Command"=>"script/run ", "Created"=>1394470428, "Id"=>"41a68bda6eb0a5bb78bbde19363e543f9c4f0e845a3eb130a6253972051bffb0", "Image"=>"quay.io/newrelic/rubicon:5f23ac3fad7979cd1efdc9295e0d8c5707d1c806", "Names"=>["/happy_pike"], "Ports"=>[{"IP"=>"0.0.0.0", "PrivatePort"=>80, "PublicPort"=>8484, "Type"=>"tcp"}], "Status"=>"Up 13 seconds"}]
 
-    running_containers = target_server.find_containers_by_name(service_name)
-    container = running_containers.pop
-
-    unless running_containers.empty?
-      # This _should_ never happen, but...
-      error "More than one container is bound to service name #{service_name} on #{target_server}!"
-      return false
-    end
+    container = target_server.find_container_by_id(container_id)
 
     if container
       info "Found container up for #{Time.now.to_i - container['Created'].to_i} seconds"
